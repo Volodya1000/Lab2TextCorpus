@@ -60,3 +60,16 @@ class SearchController:
                 context = ' '.join(pre + [sentence[start:end]] + post)
                 results.append(f"[...] {context} [...]")
             return results
+        
+    def search_by_grammar_feature(self, feature, value):
+        with self.db.lock, self.db.conn:
+            cur = self.db.conn.cursor()
+            cur.execute('''
+                SELECT t.token, t.lemma, t.pos, s.sentence_text, d.title 
+                FROM tokens t
+                JOIN grammar_features gf ON t.id = gf.token_id
+                JOIN sentences s ON t.sentence_id = s.id
+                JOIN documents d ON s.doc_id = d.id
+                WHERE gf.feature = ? AND gf.value = ?
+            ''', (feature, value))
+            return cur.fetchall()

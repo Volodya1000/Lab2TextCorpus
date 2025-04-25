@@ -31,12 +31,19 @@ class Database:
                     token TEXT,
                     lemma TEXT,
                     pos TEXT,
-                    feats TEXT,
                     start INTEGER,
                     end INTEGER,
                     FOREIGN KEY(sentence_id) REFERENCES sentences(id)
                 );
+                CREATE TABLE IF NOT EXISTS grammar_features (
+                    token_id INTEGER,
+                    feature TEXT,
+                    value TEXT,
+                    FOREIGN KEY(token_id) REFERENCES tokens(id)
+                );
                 CREATE INDEX IF NOT EXISTS idx_lemma ON tokens(lemma);
                 CREATE INDEX IF NOT EXISTS idx_pos ON tokens(pos);
                 CREATE INDEX IF NOT EXISTS idx_token ON tokens(token);
+                CREATE INDEX IF NOT EXISTS idx_token_id ON grammar_features(token_id);
+                CREATE INDEX IF NOT EXISTS idx_grammar_feature ON grammar_features(feature, value);
             ''')

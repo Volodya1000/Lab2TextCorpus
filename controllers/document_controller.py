@@ -47,39 +47,83 @@ class DocumentController:
                 VALUES (?, ?, ?, ?, ?)
             ''', (title, author, date, genre, text))
             return cur.lastrowid
-
+   
     def _save_sentences_and_tokens(self, doc, doc_id):
+        # Сохраняем предложения
         sentences = [(doc_id, sent.text) for sent in doc.sents]
         with self.db.conn:
             cur = self.db.conn.cursor()
-            # Вставляем предложения и получаем их ID
-            cur.executemany("INSERT INTO sentences (doc_id, sentence_text) VALUES (?, ?)", sentences)
             
-            # Получаем все ID предложений для текущего документа
+            # Вставляем предложения
+            cur.executemany(
+                "INSERT INTO sentences (doc_id, sentence_text) VALUES (?, ?)", 
+                sentences
+            )
+            
+            # Получаем ID вставленных предложений
             cur.execute("SELECT id FROM sentences WHERE doc_id = ? ORDER BY id", (doc_id,))
             sent_ids = [row[0] for row in cur.fetchall()]
             
-            tokens = []
+            grammar_features = []
             for sent_idx, sent in enumerate(doc.sents):
-                # Проверяем корректность индекса
+                # Пропускаем если не совпадает количество предложений (защита от коррупции данных)
                 if sent_idx >= len(sent_ids):
-                    break  # или raise IndexError("Несоответствие количества предложений")
+                    continue
+                    
                 sentence_id = sent_ids[sent_idx]
+                
                 for token in sent.tokens:
-                    tokens.append((
+                    # Лемматизация
+                    token.lemmatize(self.nlp.morph_vocab)
+                    
+                    # Обработка грамматических признаков
+                    feats = token.feats or {}
+                    feats_str = ""
+                    if isinstance(feats, dict):
+                        feats_str = "|".join([f"{k}={v}" for k, v in feats.items()])
+                    else:
+                        feats_str = str(feats)
+                    
+                    # Сохраняем токен
+                    cur.execute('''
+                        INSERT INTO tokens (
+                            sentence_id, 
+                            token, 
+                            lemma, 
+                            pos, 
+                            start, 
+                            end
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (
                         sentence_id,
                         token.text,
                         token.lemma,
                         token.pos,
-                        str(token.feats) if token.feats else '',
                         token.start,
                         token.stop
                     ))
-            # Вставляем токены
-            cur.executemany('''
-                INSERT INTO tokens (sentence_id, token, lemma, pos, feats, start, end)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', tokens)
+                    token_id = cur.lastrowid
+                    
+                    # Сохраняем грамматические признаки
+                    if feats_str:
+                        for feat in feats_str.split('|'):
+                            if '=' in feat:
+                                key, val = feat.split('=', 1)
+                                grammar_features.append((
+                                    token_id, 
+                                    key.strip(), 
+                                    val.strip()
+                                ))
+            
+            # Пакетная вставка грамматических признаков
+            if grammar_features:
+                cur.executemany('''
+                    INSERT INTO grammar_features (
+                        token_id, 
+                        feature, 
+                        value
+                    ) VALUES (?, ?, ?)
+                ''', grammar_features)
 
     def delete_document(self, doc_id):
         with self.db.lock, self.db.conn:

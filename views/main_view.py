@@ -89,7 +89,15 @@ class MainView:
         ttk.Label(top_info, textvariable=self.pos_var).grid(row=1, column=1)
         ttk.Label(top_info, text="Грамматика:").grid(row=2, column=0)
         self.gram_var = tk.StringVar()
-        ttk.Label(top_info, textvariable=self.gram_var).grid(row=2, column=1)
+        
+        gram_frame = ttk.Frame(top_info)
+        gram_frame.grid(row=2, column=1, sticky="nsew")
+        self.gram_text = tk.Text(gram_frame, wrap=tk.WORD, height=3, width=30)
+        scroll = ttk.Scrollbar(gram_frame, command=self.gram_text.yview)
+        self.gram_text.configure(yscrollcommand=scroll.set)
+        self.gram_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
         bottom_info = ttk.Frame(info_pane)
         info_pane.add(bottom_info, weight=2)
         ttk.Label(bottom_info, text="Конкорданс:").pack(fill=tk.X)
@@ -112,6 +120,9 @@ class MainView:
                     messagebox.showerror("Ошибка", msg[1])
                 elif msg[0] == "success":
                     messagebox.showinfo("Успех", msg[1])
+
+                    # Обновляем список документов после успешного добавления
+                    self.update_document_list() 
         except queue.Empty:
             pass
         finally:
@@ -192,21 +203,47 @@ class MainView:
         self.gram_var.set("")
         self.word_concordance.delete(0, tk.END)
         
-        doc = self.doc_ctrl.nlp.process(word)
-        for token in doc.tokens:
-            token.lemmatize(self.doc_ctrl.nlp.morph_vocab)  # Используем морфологию из контроллера
-        
-        if doc.tokens:
-            token = doc.tokens[0]
-            self.lemma_var.set(token.lemma)       # Исправлено
-            self.pos_var.set(token.pos)           # Исправлено
-            self.gram_var.set(
-                str(token.feats) if token.feats else '-'
-            )                                     # Исправлено
-        else:
-            self.lemma_var.set("Не найдено")
-            return
+        with self.doc_ctrl.db.lock, self.doc_ctrl.db.conn:
+            cur = self.doc_ctrl.db.conn.cursor()
+            # Получаем все возможные леммы и части речи для слова
+            cur.execute('''
+                SELECT DISTINCT lemma, pos 
+                FROM tokens 
+                WHERE token = ?
+            ''', (word,))
+            token_info = cur.fetchall()
+            
+            if token_info:
+                # Берем первую запись для примера (можно добавить выборку всех вариантов)
+                self.lemma_var.set(token_info[0][0] if token_info[0][0] else "Не найдено")
+                self.pos_var.set(token_info[0][1] if token_info[0][1] else "Не найдено")
+                
+                # Собираем ВСЕ грамматические признаки для всех токенов с этой словоформой
+                cur.execute('''
+                    SELECT feature, value 
+                    FROM grammar_features 
+                    WHERE token_id IN (
+                        SELECT id 
+                        FROM tokens 
+                        WHERE token = ?
+                    )
+                ''', (word,))
+                features = cur.fetchall()
+                if features:
+                    self.gram_text.delete(1.0, tk.END)  # Очищаем предыдущее содержимое
+                    if features:
+                        gram_text = '\n'.join([f"• {f[0]} = {f[1]}" for f in features])
+                        self.gram_text.insert(tk.END, gram_text)
+                    else:
+                        self.gram_text.insert(tk.END, "Нет данных")
+                else:
+                    self.gram_var.set("Нет данных")
+            else:
+                self.lemma_var.set("Не найдено")
+                self.pos_var.set("Не найдено")
+                self.gram_var.set("Нет данных")
 
+        # Обновляем конкорданс
         concordance = self.search_ctrl.get_concordance(
             word,
             self.context_left.get(),
