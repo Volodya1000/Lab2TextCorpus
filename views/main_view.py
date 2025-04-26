@@ -14,30 +14,26 @@ class MainView:
         self.root = root
         self.doc_ctrl = doc_controller
         self.search_ctrl = search_controller
+
+        # переводчик
         self.translator = RussianTranslator()
+
+        # активные фильтры: ключи — названия (например, 'Case', 'Часть речи'), 
+        # значения — выбранные русские значения
         self.active_filters: Dict[str, str] = {}
+        # виджеты combobox, чтобы можно было сбрасывать их програмно
         self.filter_widgets: Dict[str, ttk.Combobox] = {}
 
-        # --- Window setup ---
         self.root.title("Корпусный менеджер - Литература")
         self.root.geometry("1200x800")
 
-        # --- Menus ---
         self.create_menu()
-
-        # --- Main interface (documents tree + search + result panes) ---
         self.create_main_interface()
-
-        # --- Grammar filter panel ---
-        self.create_filter_panel()
-
-        # --- Populate documents list ---
+        self.create_filter_panel()     # панель с грамматикой + POS
         self.update_document_list()
-
-        # --- Start progress queue polling ---
         self.root.after(100, self.process_progress_queue)
 
-        # Make text widgets read-only by default
+        # сделать текстовые поля только для чтения
         self.concordance_text.configure(state='disabled')
         self.gram_text.configure(state='disabled')
 
@@ -56,36 +52,49 @@ class MainView:
 
         self.root.config(menu=menu_bar)
 
+    def create_menu(self):
+        menu_bar = tk.Menu(self.root)
+        file_menu = tk.Menu(menu_bar, tearoff=0)
+        file_menu.add_command(label="Добавить документ", command=self.open_add_document_dialog)
+        file_menu.add_command(label="Удалить документ", command=self.delete_document)
+        file_menu.add_separator()
+        file_menu.add_command(label="Выход", command=self.root.quit)
+        menu_bar.add_cascade(label="Файл", menu=file_menu)
+        help_menu = tk.Menu(menu_bar, tearoff=0)
+        help_menu.add_command(label="О программе", command=self.show_about)
+        menu_bar.add_cascade(label="Помощь", menu=help_menu)
+        self.root.config(menu=menu_bar)
+
     def create_main_interface(self):
         main_pane = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         main_pane.pack(fill=tk.BOTH, expand=True)
 
-        # --- Left: document list ---
+        # Левый фрейм: список документов
         left_frame = ttk.Frame(main_pane)
         main_pane.add(left_frame, weight=1)
         ttk.Label(left_frame, text="Документы корпуса").pack(fill=tk.X)
         self.documents_tree = ttk.Treeview(
             left_frame,
-            columns=("title", "author", "date", "genre"),
+            columns=("title","author","date","genre"),
             show="headings"
         )
-        for col, text in [("title","Заголовок"),("author","Автор"),("date","Дата"),("genre","Жанр")]:
-            self.documents_tree.heading(col, text=text)
+        for col, txt in [("title","Заголовок"),("author","Автор"),("date","Дата"),("genre","Жанр")]:
+            self.documents_tree.heading(col, text=txt)
         self.documents_tree.pack(fill=tk.BOTH, expand=True)
         self.documents_tree.bind('<<TreeviewSelect>>', self.show_document_content)
 
-        # --- Right: search + results + view tabs ---
+        # Правый фрейм: поиск + вкладки
         right_frame = ttk.Frame(main_pane)
         main_pane.add(right_frame, weight=3)
 
-        # Search controls
+        # Поисковая строка
         search_frame = ttk.LabelFrame(right_frame, text="Поиск")
         search_frame.pack(fill=tk.X, padx=5, pady=5)
         self.search_entry = ttk.Entry(search_frame, width=50)
         self.search_entry.pack(side=tk.LEFT, padx=5, pady=5)
         self.search_type = ttk.Combobox(
             search_frame,
-            values=["Лемма", "Словоформа", "Часть речи"],
+            values=["Лемма","Словоформа","Часть речи"],
             state="readonly",
             width=12
         )
@@ -93,32 +102,31 @@ class MainView:
         self.search_type.pack(side=tk.LEFT, padx=5)
         ttk.Button(search_frame, text="Искать", command=self.perform_search).pack(side=tk.LEFT, padx=5)
 
-        # Concordance context settings
-        conc_settings = ttk.Frame(right_frame)
-        conc_settings.pack(fill=tk.X, padx=5)
-        ttk.Label(conc_settings, text="Слева:").pack(side=tk.LEFT, padx=2)
+        # Настройки контекста конкорданса
+        conc_frame = ttk.Frame(right_frame)
+        conc_frame.pack(fill=tk.X, padx=5)
+        ttk.Label(conc_frame, text="Слева:").pack(side=tk.LEFT, padx=2)
         self.context_left = tk.IntVar(value=5)
-        ttk.Spinbox(conc_settings, from_=1, to=20, textvariable=self.context_left, width=3).pack(side=tk.LEFT)
-        ttk.Label(conc_settings, text="Справа:").pack(side=tk.LEFT, padx=2)
+        ttk.Spinbox(conc_frame, from_=1, to=20, textvariable=self.context_left, width=3).pack(side=tk.LEFT)
+        ttk.Label(conc_frame, text="Справа:").pack(side=tk.LEFT, padx=2)
         self.context_right = tk.IntVar(value=5)
-        ttk.Spinbox(conc_settings, from_=1, to=20, textvariable=self.context_right, width=3).pack(side=tk.LEFT)
+        ttk.Spinbox(conc_frame, from_=1, to=20, textvariable=self.context_right, width=3).pack(side=tk.LEFT)
 
-        # Notebook for tabs
+        # Вкладки результатов
         self.notebook = ttk.Notebook(right_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True)
 
-        # --- Tab 1: Text view ---
+        # --- вкладка: просмотр текста ---
         self.view_frame = ttk.Frame(self.notebook)
         self.concordance_text = tk.Text(self.view_frame, wrap=tk.WORD)
         self.concordance_text.pack(fill=tk.BOTH, expand=True)
         self.concordance_text.bind("<ButtonRelease-1>", self.handle_text_selection)
         self.notebook.add(self.view_frame, text="Просмотр")
 
-        # --- Tab 2: Word info ---
+        # --- вкладка: информация о слове ---
         self.info_frame = ttk.Frame(self.notebook)
         info_pane = ttk.PanedWindow(self.info_frame, orient=tk.VERTICAL)
         info_pane.pack(fill=tk.BOTH, expand=True)
-
         top_info = ttk.Frame(info_pane)
         info_pane.add(top_info, weight=1)
         ttk.Label(top_info, text="Лемма:").grid(row=0, column=0, sticky="w")
@@ -144,7 +152,7 @@ class MainView:
         self.word_concordance.bind('<<ListboxSelect>>', self.show_full_sentence)
         self.notebook.add(self.info_frame, text="Информация о слове")
 
-        # --- Tab 3: Search results ---
+        # --- вкладка: результаты поиска ---
         self.search_frame = ttk.Frame(self.notebook)
         self.results_list = tk.Listbox(self.search_frame)
         self.results_list.pack(fill=tk.BOTH, expand=True)
@@ -152,9 +160,32 @@ class MainView:
         self.notebook.add(self.search_frame, text="Результаты поиска")
 
     def create_filter_panel(self):
-        filter_frame = ttk.LabelFrame(self.root, text="Грамматические фильтры")
+        """
+        Добавляем фильтрацию:
+         - Сначала часть речи (общая для Natasha)
+         - Затем все другие грамматические признаки
+        """
+        filter_frame = ttk.LabelFrame(self.root, text="Фильтры")
         filter_frame.pack(fill=tk.X, padx=5, pady=5)
 
+        # 1) Фильтр по POS
+        pos_frame = ttk.Frame(filter_frame)
+        pos_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(pos_frame, text="Часть речи:").pack(side=tk.LEFT, padx=2)
+        pos_values = list(self.translator.pos_translations.values())
+        cmb_pos = ttk.Combobox(
+            pos_frame,
+            values=[""] + pos_values,
+            state="readonly",
+            width=20
+        )
+        cmb_pos.pack(side=tk.LEFT, padx=2)
+        cmb_pos.bind("<<ComboboxSelected>>", lambda e: self.on_filter_change("pos", cmb_pos.get()))
+        btn_pos = ttk.Button(pos_frame, text="✕", width=2, command=lambda: self.reset_filter("pos"))
+        btn_pos.pack(side=tk.LEFT, padx=2)
+        self.filter_widgets["pos"] = cmb_pos
+
+        # 2) Оставшиеся грамматические признаки
         features = self.translator.get_all_features()
         rows = []
         for i, feat in enumerate(features):
@@ -164,9 +195,7 @@ class MainView:
                 frame_row = ttk.Frame(filter_frame)
                 frame_row.pack(fill=tk.X)
                 rows.append(frame_row)
-            # label
             ttk.Label(rows[row], text=feat).grid(row=0, column=col*3, padx=2)
-            # combobox
             cmb = ttk.Combobox(
                 rows[row],
                 values=[""] + self.translator.get_feature_values(feat),
@@ -175,7 +204,6 @@ class MainView:
             )
             cmb.grid(row=0, column=col*3+1, padx=2, pady=2)
             cmb.bind("<<ComboboxSelected>>", lambda e, f=feat, c=cmb: self.on_filter_change(f, c.get()))
-            # reset button
             btn = ttk.Button(rows[row], text="✕", width=2, command=lambda f=feat: self.reset_filter(f))
             btn.grid(row=0, column=col*3+2, padx=2)
             self.filter_widgets[feat] = cmb
@@ -205,7 +233,6 @@ class MainView:
             return
         search_type = self.search_type.get()
         results = self.search_ctrl.search(search_type, query, self.active_filters)
-
         self.results_list.delete(0, tk.END)
         for token, lemma, pos, sent, title in results:
             display_pos = self.translator.translate_pos(pos)
