@@ -8,25 +8,65 @@ class SearchController:
         self.translator = RussianTranslator()
    
 
-    def get_concordance(self, token, context_left=5, context_right=5):
+    # controllers/search_controller.py
+
+from typing import List, Tuple, Any
+from models.database import Database
+
+class SearchController:
+    def __init__(self, db: Database):
+        self.db = db
+        # ... остальное без изменений ...
+
+    def get_concordance(
+        self,
+        token_text: str,
+        context_left: int = 5,
+        context_right: int = 5
+    ) -> List[str]:
+        """
+        Для каждого вхождения token_text возвращает контекст:
+        context_left токенов слева + сам токен + context_right токенов справа.
+        """
+        concordances: List[str] = []
         with self.db.lock, self.db.conn:
             cur = self.db.conn.cursor()
-            cur.execute('''
-                SELECT s.sentence_text, t.start, t.end 
-                FROM tokens t
-                JOIN sentences s ON t.sentence_id = s.id
-                WHERE t.token = ?
-            ''', (token,))
-            results = []
-            for row in cur.fetchall():
-                sentence = row[0]
-                start = row[1]
-                end = row[2]
-                pre = sentence[:start].rsplit(' ', context_left+1)[-context_left-1:]
-                post = sentence[end:].split(' ', context_right)[:context_right]
-                context = ' '.join(pre + [sentence[start:end]] + post)
-                results.append(f"[...] {context} [...]")
-            return results
+            # получаем все пары (token_id, sentence_id) для данного текста токена
+            cur.execute(
+                "SELECT id, sentence_id FROM tokens WHERE token = ?",
+                (token_text,)
+            )
+            hits = cur.fetchall()  # [(token_id, sentence_id), ...]
+
+            for token_id, sent_id in hits:
+                # забираем все токены этого предложения в порядке появления
+                cur.execute(
+                    "SELECT id, token FROM tokens "
+                    "WHERE sentence_id = ? "
+                    "ORDER BY start",
+                    (sent_id,)
+                )
+                tokens = cur.fetchall()  # [(id1, tok1), (id2, tok2), ...]
+
+                # выделяем списки отдельно
+                ids = [row[0] for row in tokens]
+                texts = [row[1] for row in tokens]
+
+                # находим позицию нашего токена
+                try:
+                    idx = ids.index(token_id)
+                except ValueError:
+                    continue
+
+                # формируем контекст
+                left = texts[max(0, idx - context_left): idx]
+                center = texts[idx]
+                right = texts[idx + 1: idx + 1 + context_right]
+
+                concordances.append(" ".join(left + [center] + right))
+
+        return concordances
+
     
 
     def search(self, search_type: str, query: str, filters: Dict[str, str]) -> List[Tuple[Any, ...]]:
