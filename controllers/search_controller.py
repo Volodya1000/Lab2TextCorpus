@@ -1,22 +1,44 @@
 from typing import Any, Dict, List, Tuple
 from models.database import Database
 from utils.russian_translator import RussianTranslator
+from typing import List, Tuple, Any
+from models.database import Database
+from utils.russian_translator import RussianTranslator
+from config import Config
 
 class SearchController:
     def __init__(self, db: Database):
         self.db = db
         self.translator = RussianTranslator()
-   
-
-    # controllers/search_controller.py
-
-from typing import List, Tuple, Any
-from models.database import Database
-
-class SearchController:
-    def __init__(self, db: Database):
-        self.db = db
-        # ... остальное без изменений ...
+        
+    def get_grammar(
+        self,
+        token_text: str,
+        lemma: str,
+        pos: str,
+        doc_title: str
+    ) -> list[tuple[str, str]]:
+        """
+        Возвращает список грамматических признаков (feature, value)
+        для данного токена в указанном документе.
+        """
+        feats: list[tuple[str, str]] = []
+        with self.db.lock, self.db.conn:
+            cur = self.db.conn.cursor()
+            # Изменить SQL-запрос на:
+            cur.execute("""
+    SELECT gf.feature, gf.value
+    FROM tokens t
+    JOIN sentences s ON t.sentence_id = s.id
+    JOIN documents d ON s.doc_id = d.id
+    JOIN grammar_features gf ON gf.token_id = t.id
+    WHERE LOWER(t.token) = LOWER(?)
+    AND LOWER(t.lemma) = LOWER(?)
+    AND t.pos = ?
+    AND d.title = ?
+""", (token_text, lemma, pos, doc_title))  # Убрано форматирование
+            feats = cur.fetchall()
+        return feats
 
     def get_concordance(
         self,
@@ -67,44 +89,88 @@ class SearchController:
 
         return concordances
 
-    
+    def search(
+    self,
+    search_type: str,
+    query: str,
+    filters: Dict[str, str],
+    context_left: int = Config.CONTEXT_LEFT,
+    context_right: int = Config.CONTEXT_RIGHT
+    ,
+    partial_match: bool = False
+) -> List[Tuple[Any, ...]]:
+        where = []
+        params = []
+        query = query.strip()
 
-    def search(self, search_type: str, query: str, filters: Dict[str, str]) -> List[Tuple[Any, ...]]:
-        where, params = [], []
-
-        # базовый поиск
+        # Базовый поиск
         if search_type == 'Лемма':
-            where.append('LOWER(t.lemma)=LOWER(?)'); params.append(query)
+            if partial_match:  # Используем параметр partial_match
+                where.append("LOWER(t.lemma) LIKE LOWER(?) || '%'")
+            else:
+                where.append("LOWER(t.lemma) = LOWER(?)")
+            params.append(query)
+        
         elif search_type == 'Словоформа':
-            where.append('t.token=?'); params.append(query)
-        else:  # поиск по POS
-            rev_pos = {v: k for k, v in self.translator.pos_translations.items()}
-            pos_code = rev_pos.get(query, query)
-            where.append('t.pos=?'); params.append(pos_code)
+            if partial_match:  # Используем параметр partial_match
+                where.append("LOWER(t.token) LIKE LOWER(?) || '%'")
+            else:
+                where.append("LOWER(t.token) = LOWER(?)")
+            params.append(query)
 
-        # фильтр по POS из панели (если есть)
+        # Фильтры из панели
         if 'pos' in filters:
-            rus = filters.pop('pos')
-            rev_pos = {v: k for k, v in self.translator.pos_translations.items()}
-            code = rev_pos.get(rus, rus)
-            where.append('t.pos=?'); params.append(code)
+            pos_code = self._translate_pos_to_code(filters.pop('pos'))
+            if pos_code:
+                where.append("t.pos = ?")
+                params.append(pos_code)
 
-        # остальные грамматические фильтры
+        # Грамматические фильтры
         for feat, rus_val in filters.items():
-            code_val = self.translator.translate_filter_display(feat, rus_val)
-            where.append(
-                "EXISTS(SELECT 1 FROM grammar_features gf WHERE gf.token_id=t.id AND gf.feature=? AND gf.value=?)"
-            )
-            params += [feat, code_val]
+            if rus_val:
+                code_val = self.translator.translate_filter_display(feat, rus_val)
+                where.append(
+                    "EXISTS(SELECT 1 FROM grammar_features gf "
+                    "WHERE gf.token_id = t.id AND gf.feature = ? AND gf.value = ?)"
+                )
+                params.extend([feat, code_val])
 
-        sql = f"""
-            SELECT t.token, t.lemma, t.pos, s.sentence_text, d.title
-            FROM tokens t
-            JOIN sentences s ON t.sentence_id=s.id
-            JOIN documents d ON s.doc_id=d.id
-            WHERE {' AND '.join(where)}
+        # Формирование SQL-запроса
+        sql = """
+            SELECT 
+    t.token,
+    t.lemma,
+    t.pos,
+    d.title,
+    COUNT(*) as count 
+FROM tokens t
+JOIN sentences s ON t.sentence_id = s.id
+JOIN documents d ON s.doc_id = d.id
+WHERE ...
+GROUP BY t.token, t.lemma, t.pos, d.title  
+ORDER BY d.title
         """
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+            
+        sql += " ORDER BY d.title, s.id, t.start LIMIT 500"
+
+        # Отладочный вывод
+        print("[DEBUG] Search SQL:", sql)
+        print("[DEBUG] Params:", params)
+
+        # Выполнение запроса
         with self.db.lock, self.db.conn:
             cur = self.db.conn.cursor()
             cur.execute(sql, params)
             return cur.fetchall()
+        
+
+    def _translate_pos_to_code(self, pos: str) -> str:
+        rev_pos = {
+            "Существительное": "NOUN",
+            "Глагол": "VERB",
+            "Прилагательное": "ADJ",
+            # ... остальные части речи
+        }
+        return rev_pos.get(pos.strip().capitalize(), "")

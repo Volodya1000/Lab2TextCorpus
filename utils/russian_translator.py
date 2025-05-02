@@ -81,6 +81,9 @@ class RussianTranslator:
             "PART": "Частица",
             "INTJ": "Междометие"
         }
+        self.reverse_pos_translations = {
+    rus: code for code, rus in self.pos_translations.items()
+}
 
     def translate_morph(self, morph_info: Dict[str, str]) -> Dict[str, str]:
         translated = {}
@@ -110,4 +113,9 @@ class RussianTranslator:
     def translate_syntax(self, syntax_role):
         return self.syntax_translations.get(syntax_role, syntax_role)
     
+    def translate_filter_display(self, feature: str, rus_value: str) -> str:
+        if feature == "pos":
+            return self.reverse_pos_translations.get(rus_value, rus_value)
+        return self.reverse_morph.get(rus_value, rus_value)
+        
    
