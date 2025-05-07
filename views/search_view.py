@@ -7,7 +7,8 @@ class SearchView(ttk.Frame):
     def __init__(self, parent, main_view, search_ctrl, on_search, on_result_select, get_concordance):
         super().__init__(parent)
         self.main_view = main_view 
-        self.search_ctrl = search_ctrl  
+        self.search_ctrl = search_ctrl 
+        self.translator = search_ctrl.translator 
         self.on_search = on_search
         self.get_concordance = get_concordance
         bar = ttk.LabelFrame(self, text="Поиск") 
@@ -42,7 +43,7 @@ class SearchView(ttk.Frame):
         pane.pack(fill=tk.BOTH, expand=True)
         # — дерево
         left = ttk.Frame(pane); pane.add(left, weight=1)
-        self.tree = ttk.Treeview(left, columns=("token","lemma","pos","doc"), show="headings")
+        self.tree = ttk.Treeview(left, columns=("token","lemma","pos","doc","sentence"), show="headings")
         for c,t in [("token","Слово"),("lemma","Лемма"),("pos","Часть речи"),("doc","Документ")]:
             self.tree.heading(c, text=t)
         self.tree.pack(fill=tk.BOTH, expand=True)
@@ -141,10 +142,15 @@ class SearchView(ttk.Frame):
         right = self.ctx_right.get()
         self.select_callback(token, lemma, pos, doc_title, left, right)
 
+   
     def show_grammar(self, feats):
-        self.txt_gram.configure(state='normal'); self.txt_gram.delete(1.0, tk.END)
-        for f,v in feats:
-            self.txt_gram.insert(tk.END, f"• {f} = {v}\n")
+        self.txt_gram.configure(state='normal')
+        self.txt_gram.delete(1.0, tk.END)
+        for f, v in feats:
+            # Переводим категорию и значение
+            translated_v = self.translator.morph_translations.get(f, {}).get(v, v)
+            #self.txt_gram.insert(tk.END, f"• {translated_f}: {translated_v}\n")
+            self.txt_gram.insert(tk.END, f"• {translated_v}\n")
         self.txt_gram.configure(state='disabled')
 
     def show_concordance(self, lines):
@@ -160,4 +166,5 @@ class SearchView(ttk.Frame):
         
         # Добавление новых данных
         for row in results:
-            self.tree.insert("", "end", values=row)
+            translated_pos = self.search_ctrl.translator.translate_pos(row[2])
+            self.tree.insert("", "end", values=(row[0], row[1], translated_pos, row[3], row[4]))

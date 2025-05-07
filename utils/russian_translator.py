@@ -68,7 +68,20 @@ class RussianTranslator:
             for feat_map in self.morph_translations.values()
             for code, rus in feat_map.items()
         }
-
+        self.feature_names = {
+            "Case": "Падеж",
+            "Number": "Число",
+            "Gender": "Род",
+            "Tense": "Время",
+            "Aspect": "Вид",
+            "Mood": "Наклонение",
+            "VerbForm": "Форма глагола",
+            "Person": "Лицо",
+            "Animacy": "Одушевленность",
+            "Voice": "Залог",
+            "Degree": "Степень сравнения",
+            "Polarity": "Полярность"
+        }
         self.pos_translations = {
             "NOUN": "Существительное",
             "VERB": "Глагол",
@@ -88,11 +101,11 @@ class RussianTranslator:
     def translate_morph(self, morph_info: Dict[str, str]) -> Dict[str, str]:
         translated = {}
         for key, value in morph_info.items():
-            translated[key] = self.morph_translations.get(key, {}).get(value, value)
+            translated_key = self.morph_translations.get(key, {}).get(value, value)
+            translated[key] = translated_key
         return translated
 
     def translate_syntax(self, syntax_role: str) -> str:
-        # ... как было раньше ...
         return syntax_role
 
     def get_all_features(self) -> List[str]:
@@ -103,12 +116,6 @@ class RussianTranslator:
 
     def translate_pos(self, pos: str) -> str:
         return self.pos_translations.get(pos, pos)
-
-    def translate_filter_display(self, feature: str, rus_value: str) -> str:
-        """
-        По выбору пользователя (rus_value) возвращает внутренний код (Past, Nom и т.д.)
-        """
-        return self.reverse_morph.get(rus_value, rus_value)
 
     def translate_syntax(self, syntax_role):
         return self.syntax_translations.get(syntax_role, syntax_role)

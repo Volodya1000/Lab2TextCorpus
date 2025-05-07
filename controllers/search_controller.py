@@ -20,24 +20,32 @@ class SearchController:
     ) -> list[tuple[str, str]]:
         """
         Возвращает список грамматических признаков (feature, value)
-        для данного токена в указанном документе.
+        для данного токена в указанном документе, с переводом на русский язык.
         """
-        feats: list[tuple[str, str]] = []
+        feats = []
         with self.db.lock, self.db.conn:
             cur = self.db.conn.cursor()
-            # Изменить SQL-запрос на:
             cur.execute("""
-    SELECT gf.feature, gf.value
-    FROM tokens t
-    JOIN sentences s ON t.sentence_id = s.id
-    JOIN documents d ON s.doc_id = d.id
-    JOIN grammar_features gf ON gf.token_id = t.id
-    WHERE LOWER(t.token) = LOWER(?)
-    AND LOWER(t.lemma) = LOWER(?)
-    AND t.pos = ?
-    AND d.title = ?
-""", (token_text, lemma, pos, doc_title))  # Убрано форматирование
-            feats = cur.fetchall()
+                SELECT gf.feature, gf.value
+                FROM tokens t
+                JOIN sentences s ON t.sentence_id = s.id
+                JOIN documents d ON s.doc_id = d.id
+                JOIN grammar_features gf ON gf.token_id = t.id
+                WHERE LOWER(t.token) = LOWER(?)
+                AND LOWER(t.lemma) = LOWER(?)
+                AND t.pos = ?
+                AND d.title = ?
+            """, (token_text, lemma, pos, doc_title))
+            raw_feats = cur.fetchall()
+
+            # Переводим каждый feature и value
+            for feature, value in raw_feats:
+                translated = self.translator.translate_morph({feature: value})
+                if feature in translated:
+                    feats.append((feature, translated[feature]))
+                else:
+                    feats.append((feature, value))  # Если перевод отсутствует, оставляем как есть
+
         return feats
 
     def get_concordance(

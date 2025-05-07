@@ -162,11 +162,10 @@ class MainView:
                 return
             
             lemma, pos = result
-            # Конвертируем pos в код (например, "NOUN" → "NOUN")
-            pos_code = self.search_ctrl.translator.reverse_pos_translations.get(pos, pos)
-            
+            # Переводим часть речи
+            translated_pos = self.search_ctrl.translator.translate_pos(pos)
             # Получаем грамматику
-            feats = self.search_ctrl.get_grammar(word, lemma, pos_code, doc_title)
+            feats = self.search_ctrl.get_grammar(word, lemma, translated_pos, doc_title)
             lines = self.search_ctrl.get_concordance(word, 5, 5)
             
             self.search_view.show_grammar(feats)
