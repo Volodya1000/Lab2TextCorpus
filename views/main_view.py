@@ -13,6 +13,10 @@ class MainView:
         self.root.title("Корпусный менеджер")
         self.root.geometry("1200x800")
 
+        self.last_search_query = ""
+        self.last_search_type = "Лемма"
+        self.search_debounce_id = None
+
         # контроллеры и словарь активных фильтров
         self.doc_ctrl = doc_ctrl
         self.search_ctrl = search_ctrl
@@ -31,7 +35,8 @@ class MainView:
         self.filter_panel = FilterPanel(
             left_frame,
             on_filter_change=self.on_filter_change,
-            on_reset_all=self.on_reset_all_filters
+            on_reset_all=self.on_reset_all_filters,
+            main_view=self  # Pass reference here
         )
         self.filter_panel.pack(fill=tk.X)
         self.doc_list = DocumentListView(left_frame, on_select=self.show_document)
@@ -48,6 +53,7 @@ class MainView:
         self.doc_view.pack(fill=tk.BOTH, expand=False, padx=5, pady=5)
         self.search_view = SearchView(
             right_frame,
+            main_view=self,  # Добавить эту строку
             search_ctrl=self.search_ctrl,
             on_search=self.perform_search,
             on_result_select=self.on_search_result_selected,
@@ -58,6 +64,8 @@ class MainView:
         # Инициализируем список документов
         self.update_document_list()
 
+       
+        
        
 
     def update_document_list(self):
@@ -76,20 +84,42 @@ class MainView:
         self.doc_view.show_text(text)
 
     def on_filter_change(self, feat: str, val: str):
-        """Обновление одного фильтра"""
+        """Обновление фильтра и автоматический поиск"""
         if val:
             self.active_filters[feat] = val
         else:
             self.active_filters.pop(feat, None)
+    
+        # Запускаем поиск с задержкой 500 мс
+        if self.search_debounce_id:
+            self.root.after_cancel(self.search_debounce_id)
+        self.search_debounce_id = self.root.after(500, self.trigger_search_update)
+
+    def trigger_search_update(self):
+        """Обновление результатов с текущими параметрами"""
+        current_query = self.search_view.entry.get().strip()
+        current_type = self.search_view.type_cmb.get()
+        
+        if current_query or self.active_filters:
+            results = self.perform_search(
+                stype=current_type,
+                query=current_query,
+                _filters=self.active_filters.copy(),
+                left=self.search_view.ctx_left.get(),
+                right=self.search_view.ctx_right.get()
+            )
+            self.search_view._update_results(results)
 
     def on_reset_all_filters(self):
-        """Сбросить все фильтры и очистить UI"""
         self.active_filters.clear()
         for widget in self.filter_panel.filter_widgets.values():
             widget.set("")
+        if self.search_debounce_id:
+            self.root.after_cancel(self.search_debounce_id)
+        self.search_debounce_id = self.root.after(500, self.trigger_search_update)
 
     def perform_search(self, stype: str, query: str, _filters: dict, left: int, right: int):
-        return self.search_ctrl.search(stype, query, self.active_filters, left, right)
+        return self.search_ctrl.search(stype, query, self.active_filters.copy(), left, right)
 
     def on_search_result_selected(self, token: str, lemma: str, pos: str, doc_title: str, left: int, right: int):
         lines = self.search_ctrl.get_concordance(token, left, right)

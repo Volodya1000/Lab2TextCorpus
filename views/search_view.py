@@ -4,8 +4,9 @@ import tkinter as tk
 from tkinter import ttk
 
 class SearchView(ttk.Frame):
-    def __init__(self, parent, search_ctrl, on_search, on_result_select, get_concordance):
+    def __init__(self, parent, main_view, search_ctrl, on_search, on_result_select, get_concordance):
         super().__init__(parent)
+        self.main_view = main_view 
         self.search_ctrl = search_ctrl  
         self.on_search = on_search
         self.get_concordance = get_concordance
@@ -65,6 +66,16 @@ class SearchView(ttk.Frame):
         sb.config(command=self.txt_conc.yview); self.txt_conc.pack(fill=tk.BOTH, expand=True)
 
         self.select_callback = on_result_select
+
+        self.entry.bind("<KeyRelease>", lambda e: self._schedule_search_update())
+        self.type_cmb.bind("<<ComboboxSelected>>", lambda e: self._schedule_search_update())
+
+
+    def _schedule_search_update(self):
+        """Планирование обновления поиска"""
+        if self.main_view.search_debounce_id:
+            self.main_view.root.after_cancel(self.main_view.search_debounce_id)
+        self.main_view.search_debounce_id = self.main_view.root.after(500, self._search)
 
     def _search(self):
         q = self.entry.get().strip()

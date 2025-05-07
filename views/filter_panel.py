@@ -5,12 +5,10 @@ from tkinter import ttk
 from utils.russian_translator import RussianTranslator
 
 class FilterPanel(ttk.LabelFrame):
-    def __init__(self, parent, on_filter_change, on_reset_all):
-        """
-        on_filter_change(feature, value) — вызывается при смене любого фильтра
-        on_reset_all()               — сбросить все фильтры
-        """
+    def __init__(self, parent, on_filter_change, on_reset_all, main_view):
         super().__init__(parent, text="Фильтры")
+        
+        self.main_view = main_view
         self.translator = RussianTranslator()
         self.on_filter_change = on_filter_change
         self.on_reset_all = on_reset_all
@@ -52,8 +50,12 @@ class FilterPanel(ttk.LabelFrame):
 
     def _change(self, feat, val):
         self.on_filter_change(feat, val)
+        if self.main_view.search_debounce_id:
+            self.main_view.root.after_cancel(self.main_view.search_debounce_id)
+        self.main_view.search_debounce_id = self.main_view.root.after(500, self.main_view.trigger_search_update)
 
     def _reset(self, feat):
         cmb = self.filter_widgets[feat]
         cmb.set("")
         self.on_filter_change(feat, "")
+        
