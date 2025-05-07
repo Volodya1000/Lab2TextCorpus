@@ -17,7 +17,8 @@ class Database:
                     author TEXT,
                     date TEXT,
                     genre TEXT,
-                    text TEXT
+                    text TEXT,
+                    processing_time REAL
                 );
                 CREATE TABLE IF NOT EXISTS sentences (
                     id INTEGER PRIMARY KEY,
@@ -47,3 +48,14 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_token_id ON grammar_features(token_id);
                 CREATE INDEX IF NOT EXISTS idx_grammar_feature ON grammar_features(feature, value);
             ''')
+
+    def get_processing_stats(self):
+        with self.lock, self.conn:
+            cur = self.conn.cursor()
+            cur.execute('''
+                SELECT id, title, processing_time 
+                FROM documents 
+                WHERE processing_time IS NOT NULL
+                ORDER BY id
+            ''')
+            return cur.fetchall()

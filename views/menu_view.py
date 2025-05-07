@@ -3,6 +3,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from views.dialogs import AddDocumentDialog
+from views.report_view import ReportWindow
 
 class MenuView:
     def __init__(self, root, doc_ctrl, update_list_callback):
@@ -29,7 +30,19 @@ class MenuView:
         help_menu.add_command(label="О программе", command=self._show_about)
         menu_bar.add_cascade(label="Помощь", menu=help_menu)
 
+        report_menu = tk.Menu(menu_bar, tearoff=0)
+        report_menu.add_command(label="Статистика обработки", command=self._show_report)
+        menu_bar.add_cascade(label="Отчеты", menu=report_menu)
+
         self.root.config(menu=menu_bar)
+
+
+    def _show_report(self):
+        stats = self.doc_ctrl.db.get_processing_stats()
+        if not stats:
+            tk.messagebox.showinfo("Информация", "Нет данных для отображения")
+            return
+        ReportWindow(self.root, stats)
 
     def _on_add(self):
         dlg = AddDocumentDialog(self.root, self.doc_ctrl)

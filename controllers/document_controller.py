@@ -4,6 +4,7 @@ from models.nlp_processor import NLPProcessor
 from models.document import Document
 from utils.file_utils import extract_text
 from threading import Thread
+import time 
 
 class DocumentController:
     def __init__(self, db: Database, nlp: NLPProcessor):
@@ -25,27 +26,28 @@ class DocumentController:
             return cur.fetchone()[0] > 0
 
     def _process_document(self, file_path, title, author, date, genre):
+        start_time = time.time() 
         try:
             text = extract_text(file_path)
             if not text:
                 raise ValueError("Не удалось извлечь текст")
-
             doc = self.nlp.process(text)
+            processing_time = time.time() - start_time
             with self.db.lock, self.db.conn:
-                doc_id = self._save_document_metadata(title, author, date, genre, text)
+                doc_id = self._save_document_metadata(title, author, date, genre, text, processing_time)
                 self._save_sentences_and_tokens(doc, doc_id)
 
             self.progress_queue.put(("success", "Документ успешно добавлен"))
         except Exception as e:
             self.progress_queue.put(("error", str(e)))
 
-    def _save_document_metadata(self, title, author, date, genre, text):
+    def _save_document_metadata(self, title, author, date, genre, text, processing_time):
         with self.db.conn:
             cur = self.db.conn.cursor()
             cur.execute('''
-                INSERT INTO documents (title, author, date, genre, text)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (title, author, date, genre, text))
+                INSERT INTO documents (title, author, date, genre, text, processing_time)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (title, author, date, genre, text, processing_time))
             return cur.lastrowid
    
     def _save_sentences_and_tokens(self, doc, doc_id):
