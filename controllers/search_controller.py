@@ -10,7 +10,7 @@ class SearchController:
     def __init__(self, db: Database):
         self.db = db
         self.translator = RussianTranslator()
-        
+    
     def get_grammar(
         self,
         token_text: str,
@@ -18,10 +18,6 @@ class SearchController:
         pos: str,
         doc_title: str
     ) -> list[tuple[str, str]]:
-        """
-        Возвращает список грамматических признаков (feature, value)
-        для данного токена в указанном документе, с переводом на русский язык.
-        """
         feats = []
         with self.db.lock, self.db.conn:
             cur = self.db.conn.cursor()
@@ -37,17 +33,12 @@ class SearchController:
                 AND d.title = ?
             """, (token_text, lemma, pos, doc_title))
             raw_feats = cur.fetchall()
-
-            # Переводим каждый feature и value
+            
             for feature, value in raw_feats:
                 translated = self.translator.translate_morph({feature: value})
-                if feature in translated:
-                    feats.append((feature, translated[feature]))
-                else:
-                    feats.append((feature, value))  # Если перевод отсутствует, оставляем как есть
-
+                feats.append((feature, translated.get(feature, value)))
+                
         return feats
-
     def get_concordance(
         self,
         token_text: str,

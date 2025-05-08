@@ -146,39 +146,42 @@ class MainView:
         self.search_view.show_concordance(lines)
 
     def on_word_selected(self, word: str):
-        try:
-            if not self.doc_list.tree.selection():
-                print("Документ не выбран.")
-                return
-            
-            doc_id = self.doc_list.tree.selection()[0]
-            doc_title = self.doc_list.tree.item(doc_id, "values")[0]
-            
-            # Получаем pos и lemma токена из БД
-            with self.search_ctrl.db.lock, self.search_ctrl.db.conn:
-                cur = self.search_ctrl.db.conn.cursor()
-                cur.execute("""
-                    SELECT t.lemma, t.pos 
-                    FROM tokens t
-                    JOIN sentences s ON t.sentence_id = s.id
-                    JOIN documents d ON s.doc_id = d.id
-                    WHERE t.token = ? AND d.title = ?
-                    LIMIT 1
-                """, (word, doc_title))
-                result = cur.fetchone()
-            
-            if not result:
-                print(f"Токен '{word}' не найден в документе '{doc_title}'.")
-                return
-            
-            lemma, pos = result
-            # Переводим часть речи
-            translated_pos = self.search_ctrl.translator.translate_pos(pos)
-            # Получаем грамматику
-            feats = self.search_ctrl.get_grammar(word, lemma, translated_pos, doc_title)
-            lines = self.search_ctrl.get_concordance(word, 5, 5)
-            
-            self.search_view.show_grammar(feats)
-            self.search_view.show_concordance(lines)
-        except Exception as e:
-            print(f"Ошибка: {e}")
+        if not self.doc_list.tree.selection():
+            print("Документ не выбран.")
+            return
+
+        doc_id = self.doc_list.tree.selection()[0]
+        doc_title = self.doc_list.tree.item(doc_id, "values")[0]
+
+        with self.search_ctrl.db.lock, self.search_ctrl.db.conn:
+            cur = self.search_ctrl.db.conn.cursor()
+            cur.execute("""
+                SELECT t.lemma, t.pos 
+                FROM tokens t
+                JOIN sentences s ON t.sentence_id = s.id
+                JOIN documents d ON s.doc_id = d.id
+                WHERE t.token = ? AND d.title = ?
+                LIMIT 1
+            """, (word, doc_title))
+            result = cur.fetchone()
+
+        if not result:
+            print(f"Токен '{word}' не найден в документе '{doc_title}'.")
+            return
+
+        lemma, pos = result
+
+        # Переводим часть речи в отображаемый формат
+        translated_pos = self.search_ctrl.translator.translate_pos(pos)
+
+        # Получаем грамматику
+        feats = self.search_ctrl.get_grammar(word, lemma, pos, doc_title)
+
+        # Получаем конкорданс
+        left = self.search_view.ctx_left.get()
+        right = self.search_view.ctx_right.get()
+        lines = self.search_ctrl.get_concordance(word, left, right)
+
+        # Обновляем отображение
+        self.search_view.show_grammar(feats)
+        self.search_view.show_concordance(lines)

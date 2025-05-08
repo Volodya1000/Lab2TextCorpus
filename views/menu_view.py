@@ -48,7 +48,7 @@ class MenuView:
         self.root.after(100, self.update_list)
 
     def _on_delete(self):
-        tree = self.update_list.__self__.documents_tree  # предполагаем, что update_list привязан к MainView
+        tree = self.update_list.__self__.doc_list.tree
         sel = tree.selection()
         if not sel:
             return

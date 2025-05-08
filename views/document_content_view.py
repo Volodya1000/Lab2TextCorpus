@@ -48,10 +48,10 @@ class DocumentContentView(ttk.LabelFrame):
             self.current += 1; self._render()
 
     def _on_click(self, event):
-        # Получаем позицию клика
         index = self.text.index(f"@{event.x},{event.y}")
-        # Извлекаем слово
-        word = self.text.get(f"{index} wordstart", f"{index} wordend").strip()
+        word_start = self.text.index(f"{index} wordstart")
+        word_end = self.text.index(f"{index} wordend")
+        word = self.text.get(word_start, word_end).strip()
         
-        if word and self.main_view:  # Проверяем наличие main_view
-            self.main_view.on_word_selected(word) 
+        if word and self.main_view:
+            self.main_view.on_word_selected(word)
