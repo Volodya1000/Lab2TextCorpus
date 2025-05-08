@@ -12,14 +12,14 @@ class ReportWindow(tk.Toplevel):
         
         # График
         fig, ax = plt.subplots(figsize=(6, 4))
-        ids = [s[0] for s in stats]
-        times = [s[2] for s in stats]
-        labels = [s[1] for s in stats]
+        page_counts = [s[3] for s in stats]  # Колонка page_count
+        times_ms = [s[2] * 1000 for s in stats]  # Секунды в миллисекунды
         
-        ax.bar(ids, times)
-        ax.set_xlabel('Порядковый номер')
-        ax.set_ylabel('Время обработки (сек)')
-        ax.set_title('Время обработки документов')
+        ax.plot(page_counts, times_ms, marker='o', linestyle='-', color='skyblue')
+        ax.set_xlabel('Количество страниц')
+        ax.set_ylabel('Время обработки (миллисекунды)')
+        ax.set_title('Время обработки документов относительно количества страниц')
+        ax.grid(True)
         
         canvas = FigureCanvasTkAgg(fig, self)
         canvas.draw()
@@ -28,13 +28,17 @@ class ReportWindow(tk.Toplevel):
         # Таблица
         frame = ttk.Frame(self)
         frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
-        self.tree = ttk.Treeview(frame, columns=("num", "title", "time"), show="headings")
-        for col, text in [("num", "#"), ("title", "Документ"), ("time", "Время (сек)")]:
+        self.tree = ttk.Treeview(frame, columns=("num", "title", "pages", "time"), show="headings")
+        for col, text in [
+            ("num", "#"),
+            ("title", "Документ"),
+            ("pages", "Страницы"),
+            ("time", "Время (мс)")
+        ]:
             self.tree.heading(col, text=text)
             self.tree.column(col, width=100 if col != "title" else 400)
         
-        for i, (doc_id, title, time) in enumerate(stats, 1):
-            self.tree.insert("", "end", values=(i, title, f"{time:.2f}"))
+        for i, (doc_id, title, time, pages) in enumerate(stats, 1):
+            self.tree.insert("", "end", values=(i, title, pages, f"{time*1000:.2f}"))
         
         self.tree.pack(fill=tk.BOTH, expand=True)

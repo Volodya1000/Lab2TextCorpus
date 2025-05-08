@@ -18,7 +18,8 @@ class Database:
                     date TEXT,
                     genre TEXT,
                     text TEXT,
-                    processing_time REAL
+                    processing_time REAL,
+                    page_count INTEGER
                 );
                 CREATE TABLE IF NOT EXISTS sentences (
                     id INTEGER PRIMARY KEY,
@@ -53,9 +54,9 @@ class Database:
         with self.lock, self.conn:
             cur = self.conn.cursor()
             cur.execute('''
-                SELECT id, title, processing_time 
+                SELECT id, title, processing_time, page_count 
                 FROM documents 
-                WHERE processing_time IS NOT NULL
+                WHERE processing_time IS NOT NULL AND page_count IS NOT NULL
                 ORDER BY id
             ''')
             return cur.fetchall()

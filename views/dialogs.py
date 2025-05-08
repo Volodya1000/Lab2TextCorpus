@@ -9,7 +9,7 @@ class AddDocumentDialog(tk.Toplevel):
         self.doc_ctrl = doc_controller
         self.title("Добавить документ")
         self.geometry("600x400")
-        
+        self.genre_values = ["Роман", "Поэзия", "Драма", "Фантастика", "Научная литература", "Публицистика"]
         form_frame = ttk.Frame(self)
         form_frame.pack(fill=tk.BOTH, padx=5, pady=5)
         
@@ -17,7 +17,7 @@ class AddDocumentDialog(tk.Toplevel):
             ("Заголовок:", ttk.Entry),
             ("Автор:", ttk.Entry),
             ("Дата:", DateEntry),
-            ("Жанр:", ttk.Entry)
+            ("Жанр:", ttk.Combobox)
         ]
         
         self.widgets = {}
@@ -25,6 +25,9 @@ class AddDocumentDialog(tk.Toplevel):
             ttk.Label(form_frame, text=label).grid(row=i, column=0, padx=5, pady=5)
             if widget_type == DateEntry:
                 self.widgets[label] = DateEntry(form_frame, date_pattern='yyyy-mm-dd')
+            elif widget_type == ttk.Combobox:
+                self.widgets[label] = ttk.Combobox(form_frame, values=self.genre_values, state="readonly")
+                self.widgets[label].current(0)  # по умолчанию первый жанр
             else:
                 self.widgets[label] = widget_type(form_frame)
             self.widgets[label].grid(row=i, column=1, padx=5, pady=5)

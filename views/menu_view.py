@@ -1,5 +1,3 @@
-# views/menu_view.py
-
 import tkinter as tk
 from tkinter import messagebox
 from views.dialogs import AddDocumentDialog

@@ -10,11 +10,11 @@ class DocumentContentView(ttk.LabelFrame):
         self.page_size = page_size
         self.pages = []
         self.current = 0
-
+        '''
         self.text = tk.Text(self, wrap=tk.WORD, height=10)
         self.text.bind("<Button-1>", self._on_click) 
         self.text.pack(fill=tk.BOTH, expand=True)
-
+'''
         nav = ttk.Frame(self)
         nav.pack(fill=tk.X, pady=2)
         self.prev_btn = ttk.Button(nav, text="< Предыдущая", command=self.prev_page)

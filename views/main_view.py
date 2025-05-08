@@ -1,5 +1,4 @@
-# views/main_view.py
-
+import queue
 import tkinter as tk
 from views.menu_view import MenuView
 from views.filter_panel import FilterPanel
@@ -36,12 +35,12 @@ class MainView:
             left_frame,
             on_filter_change=self.on_filter_change,
             on_reset_all=self.on_reset_all_filters,
-            main_view=self  # Pass reference here
+            main_view=self  
         )
         self.filter_panel.pack(fill=tk.X)
         self.doc_list = DocumentListView(left_frame, on_select=self.show_document)
         self.doc_list.pack(fill=tk.BOTH, expand=True)
-        
+       
         # Правый фрейм: просмотр документа + поиск
         right_frame = tk.Frame(main_pane)
         main_pane.add(right_frame)
@@ -60,9 +59,19 @@ class MainView:
             get_concordance=self.search_ctrl.get_concordance
         )
         self.search_view.pack(fill=tk.BOTH, expand=True)
-
+     
         # Инициализируем список документов
         self.update_document_list()
+        self.check_progress_queue()
+
+    def check_progress_queue(self):
+        try:
+            msg_type, msg = self.doc_ctrl.progress_queue.get_nowait()
+            if msg_type == "success":
+                self.update_document_list()
+        except queue.Empty:
+            pass
+        self.root.after(100, self.check_progress_queue)
 
        
         
@@ -75,6 +84,7 @@ class MainView:
             cur.execute('SELECT id, title, author, date, genre FROM documents')
             docs = cur.fetchall()
         self.doc_list.update(docs)
+        self.trigger_search_update()
 
     def show_document(self, doc_id):
         """Показать текст выбранного документа"""

@@ -9,7 +9,7 @@ def main():
     root = tk.Tk()
     db = Database()
     nlp = NLPProcessor()
-    doc_controller = DocumentController(db, nlp)
+    doc_controller = DocumentController(db, nlp, update_callback=lambda: MainView.update_document_list())
     search_controller = SearchController(db)
     MainView(root, doc_controller, search_controller)
     root.mainloop()
